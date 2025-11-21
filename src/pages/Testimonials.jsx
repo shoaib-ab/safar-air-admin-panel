@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, addDoc, deleteDoc, enableNetwork } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Plus, Edit, Trash2, Star, User } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -37,6 +37,13 @@ const Testimonials = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Ensure network is enabled before making requests
+      try {
+        await enableNetwork(db);
+      } catch (networkError) {
+        console.warn('Network already enabled or error enabling:', networkError);
+      }
+      
       if (editing) {
         await setDoc(doc(db, 'testimonials', editing.id), formData);
         toast.success('Testimonial updated successfully');
@@ -50,7 +57,12 @@ const Testimonials = () => {
       fetchTestimonials();
     } catch (error) {
       console.error('Error saving testimonial:', error);
-      toast.error('Failed to save testimonial');
+      const errorMessage = error.message || 'Failed to save testimonial';
+      if (errorMessage.includes('offline')) {
+        toast.error('Network error: Please check your internet connection and try again');
+      } else {
+        toast.error(`Failed to save testimonial: ${errorMessage}`);
+      }
     }
   };
 

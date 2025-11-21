@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, addDoc, deleteDoc, enableNetwork } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Plus, Edit, Trash2, Film, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -40,6 +40,13 @@ const Destinations = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Ensure network is enabled before making requests
+      try {
+        await enableNetwork(db);
+      } catch (networkError) {
+        console.warn('Network already enabled or error enabling:', networkError);
+      }
+      
       if (editing) {
         await setDoc(doc(db, 'destination-highlights', editing.id), formData);
         toast.success('Destination updated successfully');
@@ -53,7 +60,12 @@ const Destinations = () => {
       fetchDestinations();
     } catch (error) {
       console.error('Error saving destination:', error);
-      toast.error('Failed to save destination');
+      const errorMessage = error.message || 'Failed to save destination';
+      if (errorMessage.includes('offline')) {
+        toast.error('Network error: Please check your internet connection and try again');
+      } else {
+        toast.error(`Failed to save destination: ${errorMessage}`);
+      }
     }
   };
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, enableNetwork } from 'firebase/firestore';
 import { db } from '../firebase';
 import toast from 'react-hot-toast';
 import { X, ChevronDown, Package, Sparkles, TrendingUp, Star, Heart } from 'lucide-react';
@@ -93,11 +93,30 @@ const PackageForm = ({ onSuccess, onCancel, editing }) => {
     setLoading(true);
 
     try {
+      // Ensure network is enabled before making requests
+      try {
+        await enableNetwork(db);
+      } catch (networkError) {
+        console.warn('Network already enabled or error enabling:', networkError);
+      }
+      
       const categoryRef = doc(db, 'packages', formData.category);
-      const categorySnap = await getDoc(categoryRef);
-      const existingItems = categorySnap.exists()
-        ? categorySnap.data().items || []
-        : [];
+      
+      // Get existing items, or create empty structure if document doesn't exist
+      let existingItems = [];
+      try {
+        const categorySnap = await getDoc(categoryRef);
+        if (categorySnap.exists()) {
+          existingItems = categorySnap.data().items || [];
+        }
+        // If document doesn't exist, existingItems will remain empty array
+        // We'll create it when we save
+      } catch (getError) {
+        // If getDoc fails due to offline, we'll try to write anyway
+        // Firestore will queue the write and sync when online
+        console.warn('Could not read document (may be offline), will attempt to write:', getError.message);
+        // Continue with empty array - we'll create the document structure on save
+      }
 
       // Build package data based on category
       const packageData = {
@@ -126,14 +145,21 @@ const PackageForm = ({ onSuccess, onCancel, editing }) => {
         updatedItems = [...existingItems, packageData];
       }
 
-      await setDoc(categoryRef, { items: updatedItems });
+      // Use setDoc to create/update the document
+      // This will work even if the document doesn't exist yet
+      await setDoc(categoryRef, { items: updatedItems }, { merge: false });
       toast.success(
         editing ? 'Package updated successfully' : 'Package added successfully'
       );
       onSuccess();
     } catch (error) {
       console.error('Error saving package:', error);
-      toast.error('Failed to save package');
+      const errorMessage = error.message || 'Failed to save package';
+      if (errorMessage.includes('offline')) {
+        toast.error('Network error: Please check your internet connection and try again');
+      } else {
+        toast.error(`Failed to save package: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }

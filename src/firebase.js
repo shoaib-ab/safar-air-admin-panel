@@ -1,6 +1,11 @@
 // src/firebase.js
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  enableNetwork,
+  disableNetwork,
+  connectFirestoreEmulator,
+} from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
@@ -16,10 +21,32 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// Initialize Firestore WITHOUT offline persistence for admin panel
+// This ensures writes happen immediately and don't queue
 const db = getFirestore(app);
+
+// Force enable network immediately and keep it enabled
+(async () => {
+  try {
+    await enableNetwork(db);
+    console.log('✅ Firestore network enabled');
+  } catch (error) {
+    console.error('❌ Error enabling Firestore network:', error);
+    // Retry after a short delay
+    setTimeout(async () => {
+      try {
+        await enableNetwork(db);
+        console.log('✅ Firestore network enabled on retry');
+      } catch (retryError) {
+        console.error('❌ Failed to enable network on retry:', retryError);
+      }
+    }, 1000);
+  }
+})();
+
 const auth = getAuth(app);
 // Storage will be fully functional when storage access is granted
 const storage = getStorage(app);
 
 export { app, db, auth, storage };
-

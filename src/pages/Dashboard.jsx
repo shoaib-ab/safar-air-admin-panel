@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { initializeDatabase, forcePopulateDatabase } from '../utils/populateDatabase';
+import { simplePopulateDatabase } from '../utils/populateDatabaseSimple';
 import {
   Package,
   MessageSquare,
   MapPin,
+  Database,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -16,10 +20,47 @@ const Dashboard = () => {
     totalDestinations: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [populating, setPopulating] = useState(false);
 
   useEffect(() => {
-    fetchDashboardData();
+    // Initialize database structure on first load
+    initializeDatabase().then(() => {
+      fetchDashboardData();
+    });
   }, []);
+
+  const handlePopulateDatabase = async () => {
+    if (!window.confirm('This will populate the database with sample data. Continue?')) {
+      return;
+    }
+    
+    setPopulating(true);
+    console.log('🚀 Starting database population...');
+    
+    try {
+      // Try simple populate (it has its own timeouts)
+      console.log('Trying simple populate method...');
+      const result = await simplePopulateDatabase();
+      
+      console.log('✅ Population result:', result);
+      
+      if (result.success) {
+        toast.success('Database populated successfully!');
+        // Refresh dashboard data
+        setTimeout(() => {
+          fetchDashboardData();
+        }, 1000);
+      } else {
+        toast.error(`Failed to populate database: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('❌ Error in handlePopulateDatabase:', error);
+      toast.error(`Error: ${error.message || 'Unknown error occurred'}`);
+    } finally {
+      setPopulating(false);
+      console.log('🏁 Population process finished');
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -74,11 +115,21 @@ const Dashboard = () => {
 
   return (
     <div className='space-y-4 sm:space-y-6'>
-      <div>
-        <h1 className='text-2xl sm:text-3xl font-bold text-primary-dark font-playfair'>
-          Dashboard
-        </h1>
-        <p className='text-gray-600 mt-1 text-sm sm:text-base'>Welcome back! Here's your overview.</p>
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
+        <div>
+          <h1 className='text-2xl sm:text-3xl font-bold text-primary-dark font-playfair'>
+            Dashboard
+          </h1>
+          <p className='text-gray-600 mt-1 text-sm sm:text-base'>Welcome back! Here's your overview.</p>
+        </div>
+        <button
+          onClick={handlePopulateDatabase}
+          disabled={populating}
+          className='btn-primary text-white px-4 py-2 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2'
+        >
+          <Database className='w-5 h-5' />
+          {populating ? 'Populating...' : 'Populate Database'}
+        </button>
       </div>
 
       <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6'>
